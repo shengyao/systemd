@@ -178,8 +178,7 @@ static sd_bus* bus_free(sd_bus *b) {
                  * apps, but are dead. */
 
                 assert(s->floating);
-                bus_slot_disconnect(s);
-                sd_bus_slot_unref(s);
+                bus_slot_disconnect(s, true);
         }
 
         if (b->default_bus_ptr)
@@ -2360,10 +2359,8 @@ static int process_timeout(sd_bus *bus) {
         bus->current_slot = NULL;
         bus->current_message = NULL;
 
-        if (slot->floating) {
-                bus_slot_disconnect(slot);
-                sd_bus_slot_unref(slot);
-        }
+        if (slot->floating)
+                bus_slot_disconnect(slot, true);
 
         sd_bus_slot_unref(slot);
 
@@ -2465,10 +2462,8 @@ static int process_reply(sd_bus *bus, sd_bus_message *m) {
         bus->current_handler = NULL;
         bus->current_slot = NULL;
 
-        if (slot->floating) {
-                bus_slot_disconnect(slot);
-                sd_bus_slot_unref(slot);
-        }
+        if (slot->floating)
+                bus_slot_disconnect(slot, true);
 
         sd_bus_slot_unref(slot);
 
@@ -2810,10 +2805,8 @@ static int process_closing_reply_callback(sd_bus *bus, struct reply_callback *c)
         bus->current_slot = NULL;
         bus->current_message = NULL;
 
-        if (slot->floating) {
-                bus_slot_disconnect(slot);
-                sd_bus_slot_unref(slot);
-        }
+        if (slot->floating)
+                bus_slot_disconnect(slot, true);
 
         sd_bus_slot_unref(slot);
 
@@ -2884,7 +2877,6 @@ finish:
 }
 
 static int bus_process_internal(sd_bus *bus, bool hint_priority, int64_t priority, sd_bus_message **ret) {
-        BUS_DONT_DESTROY(bus);
         int r;
 
         /* Returns 0 when we didn't do anything. This should cause the
@@ -2898,7 +2890,9 @@ static int bus_process_internal(sd_bus *bus, bool hint_priority, int64_t priorit
 
         /* We don't allow recursively invoking sd_bus_process(). */
         assert_return(!bus->current_message, -EBUSY);
-        assert(!bus->current_slot);
+        assert(!bus->current_slot); /* This should be NULL whenever bus->current_message is */
+
+        BUS_DONT_DESTROY(bus);
 
         switch (bus->state) {
 
@@ -3167,10 +3161,8 @@ static int add_match_callback(
                 r = 1;
         }
 
-        if (failed && match_slot->floating) {
-                bus_slot_disconnect(match_slot);
-                sd_bus_slot_unref(match_slot);
-        }
+        if (failed && match_slot->floating)
+                bus_slot_disconnect(match_slot, true);
 
         sd_bus_slot_unref(match_slot);
 
